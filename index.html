@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тетрис</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: url('фон.png') no-repeat center center fixed;
+            background-size: cover;
+            flex-direction: column;
+        }
+
+        canvas {
+            border: 5px solid white;
+            background-color: rgba(34, 34, 34, 0.8);
+        }
+
+        .score-board {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .level-board {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            text-align: center;
+            flex-direction: column;
+        }
+
+        #againButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            font-size: 28px;
+            color: white;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: block;
+            background: none; /* Убираем фон */
+            border: none; /* Убираем рамку */
+        }
+
+        #againButton:hover {
+            color: darkviolet; /* Меняем цвет текста при наведении */
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="tetris" width="300" height="600"></canvas>
+<div class="score-board">Счёт: 0</div>
+<div class="level-board">Уровень: 0</div>
+
+<audio id="gameMusic" src="https://kappa.vgmsite.com/soundtracks/milk-inside-a-bag-of-milk-inside-a-bag-of-milk-cost-2021/tifmqaxnkm/02.%20Ice%20Cream%21.mp3" autoplay loop></audio>
+<audio id="gameOverMusic" src="https://kappa.vgmsite.com/soundtracks/faith-official-soundtrack-2022/yfrowkhdjk/1-06.%20Gary.mp3" preload="auto"></audio>
+
+<!-- Скример-ролик -->
+<div id="gameOverScreen">
+    <video id="creepyVideo" src="creepy.mp4" autoplay loop></video> <!-- Повторяется до нажатия кнопки -->
+    <button id="againButton">AGAIN?</button>
+</div>
+
+<script>
+    const canvas = document.getElementById('tetris');
+    const ctx = canvas.getContext('2d');
+
+    const ROWS = 20;
+    const COLUMNS = 10;
+    const BLOCK_SIZE = 30;
+
+    // Цвета фигур
+    const colors = [
+        'rgb(0, 0, 139)',  // I - темно-красный
+        'rgb(0, 0, 139)',  // J - темно-синий
+        'rgb(0, 128, 0)',  // L - темно-зеленый
+        'rgb(75, 0, 130)', // O - индиго (темно-фиолетовый)
+        'rgb(0, 128, 0)',  // S - темно-зеленый
+        'rgb(75, 0, 130)', // T - индиго (темно-фиолетовый)
+        'rgb(0, 128, 0)'   // Z - темно-красный
+    ];
+
+    const shapes = [
+        [[1, 1, 1, 1]], 
+        [[1, 0, 0], [1, 1, 1]], 
+        [[0, 0, 1], [1, 1, 1]], 
+        [[1, 1], [1, 1]], 
+        [[0, 1, 1], [1, 1, 0]], 
+        [[0, 1, 0], [1, 1, 1]], 
+        [[1, 1, 0], [0, 1, 1]] 
+    ];
+
+    let board = Array.from({ length: ROWS }, () => Array(COLUMNS).fill(null));
+    let currentShape, currentPosition;
+    let level = 0;
+    let score = 0;
+
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const creepyVideo = document.getElementById('creepyVideo');
+    const againButton = document.getElementById('againButton');
+    const gameMusic = document.getElementById("gameMusic");
+    const gameOverMusic = document.getElementById("gameOverMusic");
+
+    let gameInterval; // Хранение интервала для игры, чтобы контролировать скорость
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBoard();
+        drawShape();
+        document.querySelector('.score-board').textContent = `SCORE: ${score}`;
+        document.querySelector('.level-board').textContent = `LEVEL: ${level}`;
+    }
+
+    function drawBoard() {
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLUMNS; col++) {
+                if (board[row][col]) {
+                    ctx.fillStyle = board[row][col];
+                    ctx.fillRect(col * BLOCK_SIZE, row * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    ctx.strokeRect(col * BLOCK_SIZE, row * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                }
+            }
+        }
+    }
+
+    function drawShape() {
+        for (let row = 0; row < currentShape.length; row++) {
+            for (let col = 0; col < currentShape[row].length; col++) {
+                if (currentShape[row][col]) {
+                    ctx.fillStyle = currentShape.color;
+                    ctx.fillRect((currentPosition.x + col) * BLOCK_SIZE, (currentPosition.y + row) * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    ctx.strokeRect((currentPosition.x + col) * BLOCK_SIZE, (currentPosition.y + row) * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                }
+            }
+        }
+    }
+
+    function isValidMove(newPos, newShape) {
+        for (let row = 0; row < newShape.length; row++) {
+            for (let col = 0; col < newShape[row].length; col++) {
+                if (newShape[row][col]) {
+                    const x = newPos.x + col;
+                    const y = newPos.y + row;
+
+                    if (x < 0 || x >= COLUMNS || y >= ROWS || (y >= 0 && board[y][x])) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    function moveDown() {
+        const newPos = { x: currentPosition.x, y: currentPosition.y + 1 };
+        if (isValidMove(newPos, currentShape)) {
+            currentPosition = newPos;
+        } else {
+            placeShape();
+            spawnShape();
+        }
+    }
+
+    function moveLeft() {
+        const newPos = { x: currentPosition.x - 1, y: currentPosition.y };
+        if (isValidMove(newPos, currentShape)) {
+            currentPosition = newPos;
+        }
+    }
+
+    function moveRight() {
+        const newPos = { x: currentPosition.x + 1, y: currentPosition.y };
+        if (isValidMove(newPos, currentShape)) {
+            currentPosition = newPos;
+        }
+    }
+
+    function placeShape() {
+        for (let row = 0; row < currentShape.length; row++) {
+            for (let col = 0; col < currentShape[row].length; col++) {
+                if (currentShape[row][col]) {
+                    board[currentPosition.y + row][currentPosition.x + col] = currentShape.color;
+                }
+            }
+        }
+        removeFullLines();
+    }
+
+    function removeFullLines() {
+        for (let row = ROWS - 1; row >= 0; row--) {
+            if (board[row].every(cell => cell !== null)) {
+                board.splice(row, 1);
+                board.unshift(Array(COLUMNS).fill(null));
+                score += 10;
+                if (score >= 100) {
+                    level++;
+                    score = 0;
+                }
+            }
+        }
+    }
+
+    function spawnShape() {
+        const randomIndex = Math.floor(Math.random() * shapes.length);
+        currentShape = shapes[randomIndex].map(row => row.slice());
+        currentShape.color = colors[randomIndex];
+        currentPosition = { x: Math.floor(COLUMNS / 2) - Math.floor(currentShape[0].length / 2), y: 0 };
+
+        if (!isValidMove(currentPosition, currentShape)) {
+            // Останавливаем музыку игры
+            gameMusic.pause();
+            // Включаем музыку окончания
+            gameOverMusic.play();
+            
+            // Показываем скример и кнопку
+            gameOverScreen.style.display = 'flex';
+
+            // Повторяем видео
+            creepyVideo.play();
+        }
+    }
+
+    function handleKeyPress(event) {
+        if (event.key === 'ArrowDown') {
+            moveDown();
+        } else if (event.key === 'ArrowLeft') {
+            moveLeft();
+        } else if (event.key === 'ArrowRight') {
+            moveRight();
+        }
+        draw();
+    }
+
+    function startGame() {
+        // Скрываем кнопку "AGAIN?" и экран окончания игры
+        gameOverScreen.style.display = 'none';
+
+        // Включаем музыку игры
+        gameMusic.play();
+        board = Array.from({ length: ROWS }, () => Array(COLUMNS).fill(null)); // reset board
+        spawnShape();
+
+        // Сохраняем прежнюю скорость игры
+        clearInterval(gameInterval);
+        gameInterval = setInterval(() => {
+            moveDown();
+            draw();
+        }, 150); // Делаем скорость игры постоянной
+
+        window.addEventListener('keydown', handleKeyPress);
+    }
+
+    againButton.addEventListener('click', function() {
+        // Скрыть кнопку "AGAIN?" и начать игру
+        gameOverScreen.style.display = 'none';
+        creepyVideo.pause();  // Останавливаем видео, когда нажата кнопка
+        creepyVideo.currentTime = 0;  // Сбрасываем время видео
+        startGame();
+    });
+
+    // Начать игру при загрузке страницы
+    startGame();
+</script>
+
+</body>
+</html>
+
